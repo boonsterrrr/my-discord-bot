@@ -1,4 +1,4 @@
-// index.js (Level 7: FigJam 파일 예외 처리)
+// index.js (Level 8: 파일 키 추적 버그 수정)
 
 const {
   Client,
@@ -84,14 +84,11 @@ client.on("messageCreate", async (message) => {
       const filePromises = allFileKeys.map((key) =>
         figmaClient.get(`/files/${key}`)
       );
-
-      // ⭐️⭐️⭐️ [수정] Promise.all -> Promise.allSettled 로 변경 ⭐️⭐️⭐️
       const filePromiseResults = await Promise.allSettled(filePromises);
 
-      // ⭐️⭐️⭐️ [신규] 성공한 요청(Figma 디자인 파일)만 필터링 ⭐️⭐️⭐️
       const successfulResponses = filePromiseResults
         .filter((result) => result.status === "fulfilled")
-        .map((result) => result.value); // .value에 성공한 응답 데이터가 들어있음
+        .map((result) => result.value);
 
       if (successfulResponses.length === 0) {
         return workingMsg.edit(
@@ -99,20 +96,22 @@ client.on("messageCreate", async (message) => {
         );
       }
 
-      let latestFile = null;
+      let latestFileResponse = null; // ⭐️ 변수 이름 변경
       let latestDate = new Date(0);
 
       successfulResponses.forEach((res) => {
-        // fileResponses -> successfulResponses 로 수정
         const modifiedDate = new Date(res.data.lastModified);
         if (modifiedDate > latestDate) {
           latestDate = modifiedDate;
-          latestFile = res.data;
+          latestFileResponse = res; // ⭐️ data가 아닌 전체 응답(res)을 저장
         }
       });
 
-      const latestFileKey = latestFile.document.id;
-      const { frames, fileName } = await getCardNewsFrames(latestFileKey);
+      // ⭐️⭐️⭐️ [버그 수정] 응답의 config.url에서 실제 파일 키를 추출 ⭐️⭐️⭐️
+      const latestFileKey = latestFileResponse.config.url.split("/")[2];
+      const fileName = latestFileResponse.data.name;
+
+      const { frames } = await getCardNewsFrames(latestFileKey);
 
       if (frames.length === 0) {
         return workingMsg.edit(
